@@ -171,10 +171,10 @@ def _show_gtk(apod, footer, log):
     Gtk.main()
 
 
-def message(title: str, text: str) -> None:
+def message(title: str, text: str, quiet: bool = False) -> None:
     """Small dialog for --install/--uninstall results (the release binaries have no console)."""
     print(text)
-    if not getattr(sys, "frozen", False):
+    if quiet or not getattr(sys, "frozen", False):
         return
     try:
         import tkinter as tk

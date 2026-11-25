@@ -62,10 +62,11 @@ jobs:
       - name: Smoke test Task Scheduler install/uninstall
         if: runner.os == 'Windows'
         shell: bash
+        timeout-minutes: 3
         run: |
-          dist/nasa-apod-wallpaper.exe --install --time 07:30
+          dist/nasa-apod-wallpaper.exe --install --time 07:30 --quiet
           schtasks //Query //TN "NASA APOD Wallpaper" //V //FO LIST | grep -iE "Task To Run|Start Time"
-          dist/nasa-apod-wallpaper.exe --uninstall
+          dist/nasa-apod-wallpaper.exe --uninstall --quiet
           ! schtasks //Query //TN "NASA APOD Wallpaper" 2>/dev/null
 
       - name: Package

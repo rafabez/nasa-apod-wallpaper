@@ -113,6 +113,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--time", help="time of the daily run, HH:MM 24h (default 09:00)")
     p.add_argument("--uninstall", action="store_true", help="remove the daily run and exit")
     p.add_argument("--no-schedule", action="store_true", help="don't install the daily run")
+    p.add_argument("--quiet", action="store_true", help="no dialogs for --install/--uninstall (for scripts)")
     p.add_argument("--scheduled", action="store_true", help=argparse.SUPPRESS)
     p.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     args = p.parse_args(argv)
@@ -129,15 +130,16 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.uninstall:
         schedule.uninstall()
-        window.message("NASA APOD Wallpaper", "Daily wallpaper update removed.")
+        window.message("NASA APOD Wallpaper", "Daily wallpaper update removed.", args.quiet)
         return 0
     if args.install:
         try:
             where = schedule.install(cfg["time"])
         except schedule.ScheduleError as e:
-            window.message("NASA APOD Wallpaper", f"Could not install the daily run:\n{e}")
+            window.message("NASA APOD Wallpaper", f"Could not install the daily run:\n{e}", args.quiet)
             return 1
-        window.message("NASA APOD Wallpaper", f"Wallpaper will update daily at {cfg['time']}.\n({where})")
+        window.message("NASA APOD Wallpaper", f"Wallpaper will update daily at {cfg['time']}.\n({where})",
+                       args.quiet)
         return 0
 
     api_key = os.environ.get("NASA_API_KEY") or cfg.get("nasa_api_key") or "DEMO_KEY"
