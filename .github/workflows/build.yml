@@ -1,0 +1,100 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pytest
+      - run: pytest -q
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: nasa-apod-wallpaper-windows-x64.exe
+            mode: --onefile
+          - os: macos-latest
+            asset: nasa-apod-wallpaper-macos-arm64.zip
+            mode: --onedir # .app bundle; onefile .app is deprecated in PyInstaller
+          - os: ubuntu-22.04 # older glibc = runs on more distros
+            asset: nasa-apod-wallpaper-linux-x64.tar.gz
+            mode: --onefile
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt pyinstaller
+
+      - name: Build
+        shell: bash
+        run: pyinstaller --noconfirm ${{ matrix.mode }} --windowed --name nasa-apod-wallpaper nasa_apod_wallpaper.py
+
+      - name: Smoke test
+        shell: bash
+        run: |
+          case "$RUNNER_OS" in
+            Windows) bin=dist/nasa-apod-wallpaper.exe ;;
+            macOS)   bin=dist/nasa-apod-wallpaper.app/Contents/MacOS/nasa-apod-wallpaper ;;
+            Linux)   bin=dist/nasa-apod-wallpaper ;;
+          esac
+          "$bin" --help > /dev/null
+          echo "binary starts: $bin"
+
+      - name: Smoke test Task Scheduler install/uninstall
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          dist/nasa-apod-wallpaper.exe --install --time 07:30
+          schtasks //Query //TN "NASA APOD Wallpaper" //V //FO LIST | grep -iE "Task To Run|Start Time"
+          dist/nasa-apod-wallpaper.exe --uninstall
+          ! schtasks //Query //TN "NASA APOD Wallpaper" 2>/dev/null
+
+      - name: Package
+        shell: bash
+        run: |
+          mkdir out
+          case "$RUNNER_OS" in
+            Windows) cp dist/nasa-apod-wallpaper.exe "out/${{ matrix.asset }}" ;;
+            macOS)   ditto -c -k --keepParent dist/nasa-apod-wallpaper.app "out/${{ matrix.asset }}" ;;
+            Linux)   tar -czf "out/${{ matrix.asset }}" -C dist nasa-apod-wallpaper ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: out/${{ matrix.asset }}
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: out
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true
